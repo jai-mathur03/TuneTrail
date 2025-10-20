@@ -1,329 +1,252 @@
-const express =require('express')
-const cors =require('cors')
-const multer = require('multer');
-const connectDB = require('./db/config')
-const Admin=require('./db/Admin/admin')
-const songs =require('./db/Admin/Addsong')
-const users=require('./db/User/user')
-const WishlistItem =require('./db/User/Wishlist')
-const PlaylistItem=require('./db/User/Playlist')
+// -------------------- IMPORTS --------------------
+const express = require("express");
+const cors = require("cors");
+const multer = require("multer");
+const path = require("path");
+const connectDB = require("./db/config");
+require("dotenv").config();
 
-const app=express()
-require('dotenv').config();
+// -------------------- MODELS --------------------
+const Admin = require("./db/Admin/admin");
+const songs = require("./db/Admin/Addsong");
+const users = require("./db/User/user");
+const WishlistItem = require("./db/User/Wishlist");
+const PlaylistItem = require("./db/User/Playlist");
 
-// Connect to MongoDB
+// -------------------- APP INIT --------------------
+const app = express();
+
+// Connect MongoDB
 connectDB();
 
-app.use(express.json())
-app.use(cors({
-    origin: ["http://localhost:3000"],
-    methods: ["POST", "GET", "DELETE", "PUT"],
-    credentials: true
-}));
+// Middleware
+app.use(express.json());
+app.use(
+  cors({
+    credentials: true,
+  })
+);
 
-// Set up Multer for file upload
+// -------------------- FILE UPLOAD SETUP --------------------
 const storage = multer.diskStorage({
-    destination: 'uploads', // The directory where uploaded files will be stored
-    filename: function (req, file, callback) {
-        callback(null, Date.now() + '-' + file.originalname); // Set the file name
-    },
+  destination: "uploads",
+  filename: function (req, file, callback) {
+    callback(null, Date.now() + "-" + file.originalname);
+  },
 });
 
 const upload = multer({ storage });
-app.use('/uploads', express.static('uploads')); 
+app.use("/uploads", express.static("uploads"));
 
+// -------------------- ADMIN ROUTES --------------------
 
-
-                                                //  Admin  //
-
-// Login
-app.post('/alogin', (req, resp) => {  
-    const { email, password } = req.body;   
-    Admin.findOne({ email: email })
-        .then(user => {
-            if (user) {
-                if (user.password === password) {
-                    return resp.json({ Status: "Success", user: { id:user.id,name: user.name, email: user.email } })
-                } else {
-                    resp.json("login fail")
-                }
-            } else {
-                resp.json("no user")
-            }
-        })
-  })
-  
-  // Register Api
-  app.post('/asignup', (req, resp) => {
-    const { name, email, password } = req.body;
-    Admin.findOne({ email: email })
-        .then(use => {
-            if (use) {
-                resp.json("Already have an account")
-            } else {
-                Admin.create({ email: email, name: name, password: password })
-                    .then(result => resp.json("  Account Created"))
-                    .catch(err => resp.json(err))
-            }
-        }).catch(err => resp.json("failed "))
-  })
-
-app.get('/users',(req,res)=>{
-    users.find()
-    .then((user)=>{
-        res.status(200).json(user)
+// Admin Login
+app.post("/alogin", (req, res) => {
+  const { email, password } = req.body;
+  Admin.findOne({ email: email })
+    .then((user) => {
+      if (user) {
+        if (user.password === password) {
+          return res.json({
+            Status: "Success",
+            user: { id: user.id, name: user.name, email: user.email },
+          });
+        } else {
+          res.json("login fail");
+        }
+      } else {
+        res.json("no user");
+      }
     })
-    .catch(() => {
-        res.sendStatus(500)
-    })
-})
-app.delete('/userdelete/:id',(req,res)=>{
-    const { id }=req.params
-     users.findByIdAndDelete(id)
-     .then(() => {
-        res.sendStatus(200);
-    })
-    .catch((error) => {
-        res.status(500).json({ error: 'Internal server error' });
-    });
-  })
-  app.delete('/userorderdelete/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-      await myorders.findByIdAndDelete(id);
-      res.sendStatus(200);
-    } catch (error) {
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-app.delete('/useritemdelete/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-      await items.findByIdAndDelete(id);
-      res.sendStatus(200);
-    } catch (error) {
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-
-app.get('/sellers',(req,res)=>{
-    seller.find()
-    .then((seller)=>{
-        res.status(200).json(seller)
-    })
-    .catch(() => {
-        res.sendStatus(500)
-    })
-})
-
-app.delete('/sellerdelete/:id',(req,res)=>{
-    const { id }=req.params
-     seller.findByIdAndDelete(id)
-     .then(() => {
-        res.sendStatus(200);
-    })
-    .catch((error) => {
-        res.status(500).json({ error: 'Internal server error' });
-    });
-  })
-    app.get('/orders', (req, res) => {
-    myorders.find()
-        .then((orders) => {
-            res.status(200).json(orders)
-        })
-        .catch(() => {
-            res.sendStatus(500)
-        })
+    .catch(() => res.status(500).send("Server Error"));
 });
-app.post('/addsong', upload.single('songUrl'), (req, res) => {
-    const { title, genre, singer, image } = req.body;
-    const songUrl = req.file ? req.file.path : undefined;
 
-    const song = new songs({ songUrl, title, genre, singer, image });
+// Admin Signup
+app.post("/asignup", (req, res) => {
+  const { name, email, password } = req.body;
+  Admin.findOne({ email })
+    .then((existing) => {
+      if (existing) return res.json("Already have an account");
+      Admin.create({ name, email, password })
+        .then(() => res.json("Account Created"))
+        .catch(() => res.status(500).send("Failed"));
+    })
+    .catch(() => res.status(500).send("Server Error"));
+});
 
-    song.save()
-        .then(savedSong => {
-            res.status(201).json(savedSong);
-        })
-        .catch(err => {
-            res.status(400).json({ error: 'Failed to create song' });
+// Fetch all users
+app.get("/users", (req, res) => {
+  users
+    .find()
+    .then((user) => res.status(200).json(user))
+    .catch(() => res.sendStatus(500));
+});
+
+// Delete a user
+app.delete("/userdelete/:id", (req, res) => {
+  users
+    .findByIdAndDelete(req.params.id)
+    .then(() => res.sendStatus(200))
+    .catch(() => res.status(500).json({ error: "Internal server error" }));
+});
+
+// -------------------- SONG ROUTES --------------------
+
+// Add Song
+app.post("/addsong", upload.single("songUrl"), (req, res) => {
+  const { title, genre, singer, image } = req.body;
+  const songUrl = req.file ? req.file.path : undefined;
+
+  const song = new songs({ songUrl, title, genre, singer, image });
+  song
+    .save()
+    .then((saved) => res.status(201).json(saved))
+    .catch(() => res.status(400).json({ error: "Failed to create song" }));
+});
+
+// Fetch all songs
+app.get("/songs", (req, res) => {
+  songs
+    .find()
+    .then((song) => res.status(200).json(song))
+    .catch(() => res.status(400).json({ error: "Failed to fetch songs" }));
+});
+
+// Delete song
+app.delete("/deletesong/:id", (req, res) => {
+  songs
+    .findByIdAndDelete(req.params.id)
+    .then(() => res.sendStatus(200))
+    .catch(() => res.status(500).json({ error: "Internal server error" }));
+});
+
+// -------------------- USER ROUTES --------------------
+
+// User Login
+app.post("/login", (req, res) => {
+  const { email, password } = req.body;
+  users
+    .findOne({ email })
+    .then((user) => {
+      if (!user) return res.json("User not found");
+      if (user.password === password)
+        return res.json({
+          Status: "Success",
+          user: { id: user.id, name: user.name, email: user.email },
         });
+      res.json("Invalid Password");
+    })
+    .catch(() => res.status(500).send("Server Error"));
 });
 
-app.get('/mysongs',(req,res)=>{
-    songs.find()
-    .then((song)=>{
-        res.status(200).json(song)
+// User Signup
+app.post("/signup", (req, res) => {
+  const { name, email, password } = req.body;
+  users
+    .findOne({ email })
+    .then((existing) => {
+      if (existing) return res.json("Already have an account");
+      users
+        .create({ name, email, password })
+        .then(() => res.json("Account Created"))
+        .catch(() => res.status(500).send("Failed"));
     })
-    .catch(err => {
-        res.status(400).json({ error: 'Failed to create song' });
+    .catch(() => res.status(500).send("Server Error"));
+});
+
+// -------------------- WISHLIST ROUTES --------------------
+app.get("/wishlist", async (req, res) => {
+  try {
+    const wishlist = await WishlistItem.find();
+    res.json(wishlist);
+  } catch {
+    res.status(500).send("Server Error");
+  }
+});
+
+app.post("/wishlist/add", async (req, res) => {
+  const { itemId, title, image, userId, userName, genre, songUrl, singer } =
+    req.body;
+  try {
+    const existing = await WishlistItem.findOne({ itemId });
+    if (existing) return res.status(400).json({ msg: "Item already in wishlist" });
+    const newItem = new WishlistItem({
+      itemId,
+      title,
+      userId,
+      userName,
+      genre,
+      songUrl,
+      image,
+      singer,
     });
-})
+    await newItem.save();
+    res.json(newItem);
+  } catch {
+    res.status(500).send("Server Error");
+  }
+});
 
-app.delete('/deletesong/:id',(req,res)=>{
-    const {id} =req.params;
-    songs.findByIdAndDelete(id)
-    .then(() => {
-        res.sendStatus(200);
-    })
-    .catch((error) => {
-        res.status(500).json({ error: 'Internal server error' });
+app.post("/wishlist/remove", async (req, res) => {
+  try {
+    await WishlistItem.findOneAndDelete({ itemId: req.body.itemId });
+    res.json({ msg: "Item removed from wishlist" });
+  } catch {
+    res.status(500).send("Server Error");
+  }
+});
+
+// -------------------- PLAYLIST ROUTES --------------------
+app.get("/playlist", async (req, res) => {
+  try {
+    const playlist = await PlaylistItem.find();
+    res.json(playlist);
+  } catch {
+    res.status(500).send("Server Error");
+  }
+});
+
+app.post("/playlist/add", async (req, res) => {
+  const { itemId, title, image, userId, userName, genre, songUrl, singer } =
+    req.body;
+  try {
+    const existing = await PlaylistItem.findOne({ itemId });
+    if (existing) return res.status(400).json({ msg: "Song already in playlist" });
+    const newItem = new PlaylistItem({
+      itemId,
+      title,
+      userId,
+      userName,
+      genre,
+      songUrl,
+      image,
+      singer,
     });
-})
-                                         // User
-
-   // login
-app.post('/login', (req, res) => {
-    const { email, password } = req.body;
-        users.findOne({ email: email })
-            .then(user => {
-                if (user) {
-                    if (user.password === password) {
-                        return res.json({ Status: "Success", user: { id: user.id, name: user.name, email: user.email } })
-                    }
-                    else {
-                        res.json("Invalid Password")
-                    }
-                }
-                else {
-                    res.json("User not found")
-                }
-            })
-    })
-    
-    app.post('/signup', (req, resp) => {
-        const { name, email, password } = req.body;
-        users.findOne({ email: email })
-            .then(use => {
-                if (use) {
-                    resp.json("Already have an account")
-                } else {
-                    users.create({ email: email, name: name, password: password })
-                        .then(result => resp.json("  Account Created"))
-                        .catch(err => resp.json(err))
-                }
-            }).catch(err => resp.json("failed "))
-    })                     
-app.get('/songs',(req,res)=>{
-    songs.find()
-    .then((song)=>{
-        res.status(200).json(song)
-    })
-    .catch(err => {
-        res.status(400).json({ error: 'Failed to create song' });
-    });
-})
-app.get('/wishlist', async (req, res) => {
-    try {
-      const wishlistItems = await WishlistItem.find();
-      res.json(wishlistItems);
-    } catch (error) {
-      console.error(error);
-      res.status(500).send('Server Error');
-    }
-  });
-  app.get('/wishlist/:userId', async (req, res) => {
-    const userId = req.params.userId;
-    try {
-        const tasks = await WishlistItem.find({ userId }).sort('position');
-        res.json(tasks);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch tasks' });
-    }
+    await newItem.save();
+    res.json(newItem);
+  } catch {
+    res.status(500).send("Server Error");
+  }
 });
 
-app.post('/wishlist/add', async (req, res) => {
-    const { itemId, title,image,userId,userName,genre,songUrl,singer } = req.body;
-
-    try {
-        // Check if the item is already in the wishlist
-    
-        const existingItem = await WishlistItem.findOne({ itemId });
-        if (existingItem) {
-            return res.status(400).json({ msg: 'Item already in wishlist' });
-        }
-        // Create a new wishlist item   
-        const newItem = new WishlistItem({ itemId,title,userId,userName,genre,songUrl,image,singer});
-        await newItem.save();
-
-        res.json(newItem);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Server Error');
-    }
+app.post("/playlist/remove", async (req, res) => {
+  try {
+    await PlaylistItem.findOneAndDelete({ itemId: req.body.itemId });
+    res.json({ msg: "Item removed from playlist" });
+  } catch {
+    res.status(500).send("Server Error");
+  }
 });
 
-  app.post('/wishlist/remove', async (req, res) => {
-    const { itemId } = req.body;
-  
-    try {
-      // Find and remove the item from the wishlist
-      await WishlistItem.findOneAndDelete({ itemId });
-  
-      res.json({ msg: 'Item removed from wishlist' });
-    } catch (error) {
-      console.error(error);
-      res.status(500).send('Server Error');
-    }
-  });
-
-             //Playlist
-  app.get('/playlist', async (req, res) => {
-    try {
-      const playlist = await PlaylistItem.find();
-      res.json(playlist);
-    } catch (error) {
-      console.error(error);
-      res.status(500).send('Server Error');
-    }
-  });
-  app.get('/playlist/:userId', async (req, res) => {
-    const userId = req.params.userId;
-    try {
-        const playlist = await PlaylistItem.find({ userId }).sort('position');
-        res.json(playlist);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch tasks' });
-    }
+// -------------------- SERVE FRONTEND (RENDER DEPLOYMENT) --------------------
+const frontendPath = path.resolve(__dirname, "../frontend/dist");
+app.use(express.static(frontendPath));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendPath, "index.html"));
 });
 
-app.post('/playlist/add', async (req, res) => {
-    const { itemId, title,image,userId,userName,genre,songUrl,singer } = req.body;
-
-    try {
-        // Check if the item is already in the wishlist
-    
-        const existingItem = await PlaylistItem.findOne({ itemId });
-        if (existingItem) {
-            return res.status(400).json({ msg: 'song already in Playlist' });
-        }
-        // Create a new wishlist item   
-        const newItem = new PlaylistItem({ itemId,title,userId,userName,genre,songUrl,image,singer});
-        await newItem.save();
-
-        res.json(newItem);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Server Error');
-    }
+// -------------------- START SERVER --------------------
+const PORT = process.env.PORT || 7000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-  app.post('/playlist/remove', async (req, res) => {
-    const { itemId } = req.body;
-  
-    try {
-      // Find and remove the item from the wishlist
-      await PlaylistItem.findOneAndDelete({ itemId });
-  
-      res.json({ msg: 'Item removed from playlist' });
-    } catch (error) {
-      console.error(error);
-      res.status(500).send('Server Error');
-    }
-  });
-
-
-  const PORT = process.env.PORT || 7000;
-  app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-  });
